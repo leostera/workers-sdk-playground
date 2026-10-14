@@ -12,6 +12,7 @@ fi
 
 printf 'Testing workers-sdk %s\n' "$(git -C "$SDK_DIR" rev-parse HEAD)"
 pnpm --dir "$SDK_DIR" install --frozen-lockfile
+pnpm --dir "$SDK_DIR" --filter @cloudflare/workers-utils build
 pnpm --dir "$SDK_DIR" --filter @cloudflare/local-explorer-ui build
 pnpm --dir "$SDK_DIR" --filter miniflare build
 WORKERS_SDK_DIR="$SDK_DIR" node --test test/artifacts.test.mjs

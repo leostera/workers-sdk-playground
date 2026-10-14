@@ -10,7 +10,7 @@ Requires Node.js 22+, Git 2.32+, and pnpm. Run:
 npm test
 ```
 
-The test script shallow-clones `leostera/workers-sdk` branch `lostera/artifacts-devtools-integration` into the ignored `.workers-sdk/` directory, installs that monorepo's dependencies, builds its local Explorer UI and Miniflare, then runs `node --test`. The first run downloads and builds the SDK and takes longer. It prints the exact SDK commit tested. To refresh the branch, remove `.workers-sdk/` and run again.
+The test script shallow-clones `leostera/workers-sdk` branch `lostera/artifacts-devtools-integration` into the ignored `.workers-sdk/` directory, installs that monorepo's dependencies, builds the SDK packages needed by Miniflare, then runs `node --test`. The first run downloads and builds the SDK and takes longer. It prints the exact SDK commit tested. To refresh the branch, remove `.workers-sdk/` and run again.
 
 If you already have a built checkout of the branch, use `WORKERS_SDK_DIR=/absolute/path/to/workers-sdk npm test`. The script still installs dependencies and rebuilds Miniflare. The Git push and repository operations run locally; only SDK setup needs network access.
 
