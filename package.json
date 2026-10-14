@@ -2,7 +2,14 @@
   "name": "workers-sdk-playground",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "pnpm": "10.34.7"
+  },
   "scripts": {
-    "test": "bash scripts/test.sh"
+    "postinstall": "bash scripts/install-sdk.sh",
+    "test": "node --test test/artifacts.test.mjs"
   }
 }

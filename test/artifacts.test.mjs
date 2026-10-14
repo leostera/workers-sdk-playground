@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -8,12 +9,11 @@ import { promisify } from "node:util";
 import { test } from "node:test";
 
 const exec = promisify(execFile);
-const sdkDir = process.env.WORKERS_SDK_DIR;
-if (!sdkDir) throw new Error("Run npm test to install and build the SDK first");
+const sdkDir = process.env.WORKERS_SDK_DIR ?? path.resolve(".workers-sdk");
+const miniflareModule = path.join(sdkDir, "packages/miniflare/dist/src/index.js");
+if (!existsSync(miniflareModule)) throw new Error("Run npm i before npm test");
 
-const { Miniflare } = await import(
-  pathToFileURL(path.join(sdkDir, "packages/miniflare/dist/src/index.js")).href
-);
+const { Miniflare } = await import(pathToFileURL(miniflareModule).href);
 
 async function git(cwd, args, token) {
   const env = {

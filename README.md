@@ -1,17 +1,16 @@
 # Workers SDK Artifacts playground
 
-A small end-to-end test of the local Artifacts simulator from [workers-sdk PR 3/3](https://github.com/cloudflare/workers-sdk/pull/16186). It creates a repository through a local binding, pushes a commit with Git, and reads the file back through the binding. It does not deploy a Worker or contact deployed Artifacts.
+A small end-to-end test of the local Artifacts simulator from [workers-sdk PR 3/3](https://github.com/cloudflare/workers-sdk/pull/16186).
 
-## Run
-
-Requires Node.js 22+, Git 2.32+, and pnpm. Run:
+Requires Node.js 22+, Git 2.32+, and npm. No Cloudflare credentials or globally installed pnpm are needed.
 
 ```sh
+npm i
 npm test
 ```
 
-The test script shallow-clones `leostera/workers-sdk` branch `lostera/artifacts-devtools-integration` into the ignored `.workers-sdk/` directory, installs that monorepo's dependencies, builds the SDK packages needed by Miniflare, then runs `node --test`. The first run downloads and builds the SDK and takes longer. It prints the exact SDK commit tested. To refresh the branch, remove `.workers-sdk/` and run again.
+`npm i` fetches the PR branch source into the ignored `.workers-sdk/` directory, installs its pnpm workspace dependencies, and builds Miniflare. `npm test` creates a repository through a local Artifacts binding, pushes a commit with Git, and reads the file back. The install prints the exact SDK commit tested; remove `.workers-sdk/` and run `npm i` to pick up a newer branch head.
 
-If you already have a built checkout of the branch, use `WORKERS_SDK_DIR=/absolute/path/to/workers-sdk npm test`. The script still installs dependencies and rebuilds Miniflare. The Git push and repository operations run locally; only SDK setup needs network access.
+A direct `npm install github:leostera/workers-sdk#lostera/artifacts-devtools-integration` does not work: the GitHub repository root is a pnpm monorepo with `catalog:` dependencies, not an installable Miniflare package. The `postinstall` script does the source build so the two commands above work from a fresh clone.
 
-This tests the simulator on the branch, **not** parity with the deployed service. No customer credentials or Artifacts tokens are stored in the repository.
+Only the SDK installation requires network access. The test does not deploy a Worker or contact deployed Artifacts; it does not establish parity with the deployed service. No credentials or repository tokens are stored in this repository.
