@@ -1,0 +1,4 @@
+.workers-sdk/
+node_modules/
+.wrangler/
+.dev.vars*
