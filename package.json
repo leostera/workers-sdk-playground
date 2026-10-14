@@ -6,10 +6,9 @@
     "node": ">=22"
   },
   "devDependencies": {
-    "pnpm": "10.34.7"
+    "miniflare": "https://pkg.pr.new/miniflare@045645085287874ac2f44606dfddd5718c78df1c"
   },
   "scripts": {
-    "postinstall": "bash scripts/install-sdk.sh",
     "test": "node --test test/artifacts.test.mjs"
   }
 }
