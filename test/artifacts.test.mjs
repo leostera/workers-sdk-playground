@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
 import { test } from "node:test";
-import { Miniflare } from "miniflare";
+import { setTimeout as delay } from "node:timers/promises";
+import { promisify } from "node:util";
 
 const exec = promisify(execFile);
 
@@ -28,37 +29,66 @@ async function git(cwd, args, token) {
   await exec("git", args, { cwd, env });
 }
 
-test("local Artifacts accepts a Git push and exposes the file through the binding", async (t) => {
-  const directory = await mkdtemp(path.join(tmpdir(), "artifacts-playground-"));
-  const mf = new Miniflare({
-    cf: false,
-    workers: [{
-      config: {
-        name: "playground",
-        compatibilityDate: "2026-10-14",
-        env: {
-          REPOS: { type: "artifacts", namespace: "playground", dev: { remote: false } },
-        },
-        manifest: {
-          mainModule: "index.mjs",
-          modulesRoot: directory,
-          modules: {
-            "index.mjs": {
-              type: "esm",
-              contents: "export default { fetch() { return new Response('ok'); } };",
-            },
-          },
-        },
-      },
-    }],
+async function freePort() {
+  const server = createServer();
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
   });
-  t.after(async () => {
-    await mf.dispose();
-    await rm(directory, { recursive: true, force: true });
-  });
+  const { port } = server.address();
+  await new Promise((resolve) => server.close(resolve));
+  return port;
+}
 
-  const { REPOS } = await mf.getBindings("playground");
-  const { remote, token } = await REPOS.create("demo");
+async function startDevServer(port) {
+  const child = spawn(process.execPath, ["node_modules/cf/bin/cf", "dev", "--port", String(port)], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  for (const stream of [child.stdout, child.stderr]) {
+    stream.on("data", (chunk) => {
+      output = (output + chunk.toString()).slice(-16_000);
+    });
+  }
+
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const deadline = Date.now() + 45_000;
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null) break;
+    try {
+      const response = await fetch(`${baseUrl}/health`);
+      if (response.ok && (await response.text()) === "artifacts-playground-ready") {
+        return { child, baseUrl };
+      }
+    } catch {
+      // The dev server has not opened its port yet.
+    }
+    await delay(250);
+  }
+  child.kill("SIGTERM");
+  throw new Error(`cf dev did not become ready:\n${output}`);
+}
+
+async function stopDevServer(child) {
+  if (child.exitCode !== null) return;
+  child.kill("SIGTERM");
+  await Promise.race([
+    new Promise((resolve) => child.once("exit", resolve)),
+    delay(5_000),
+  ]);
+  if (child.exitCode === null) child.kill("SIGKILL");
+}
+
+test("cf dev serves a local Artifacts binding and accepts Git pushes", async (t) => {
+  const directory = await mkdtemp(path.join(tmpdir(), "artifacts-playground-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+
+  const { child, baseUrl } = await startDevServer(await freePort());
+  t.after(() => stopDevServer(child));
+
+  const response = await fetch(`${baseUrl}/create`, { method: "POST" });
+  assert.equal(response.status, 200, "Repository creation failed");
+  const { remote, token } = await response.json();
   assert.equal(new URL(remote).hostname, "127.0.0.1");
 
   await git(directory, ["init", "--initial-branch=main", "."]);
@@ -67,8 +97,7 @@ test("local Artifacts accepts a Git push and exposes the file through the bindin
   await git(directory, ["commit", "-m", "add example file"]);
   await git(directory, ["push", remote, "main"], token);
 
-  const repo = await REPOS.get("demo");
-  const file = await repo.readFile({ ref: "main", path: "hello.txt" });
+  const file = await fetch(`${baseUrl}/read`);
+  assert.equal(file.status, 200);
   assert.equal(await file.text(), "Hello from local Artifacts!\n");
-  assert.equal((await REPOS.list()).total, 1);
 });

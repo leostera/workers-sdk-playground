@@ -6,9 +6,11 @@
     "node": ">=22"
   },
   "devDependencies": {
-    "miniflare": "https://pkg.pr.new/miniflare@045645085287874ac2f44606dfddd5718c78df1c"
+    "cf": "1.0.0-beta.17",
+    "wrangler": "https://pkg.pr.new/wrangler@045645085287874ac2f44606dfddd5718c78df1c"
   },
   "scripts": {
+    "dev": "cf dev",
     "test": "node --test test/artifacts.test.mjs"
   }
 }

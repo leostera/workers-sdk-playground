@@ -1,4 +1,5 @@
 .workers-sdk/
 node_modules/
+.cloudflare/
 .wrangler/
 .dev.vars*
