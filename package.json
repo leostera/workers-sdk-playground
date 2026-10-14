@@ -11,6 +11,6 @@
   },
   "scripts": {
     "dev": "cf dev",
-    "test": "node --test test/artifacts.test.mjs"
+    "test": "bun test"
   }
 }

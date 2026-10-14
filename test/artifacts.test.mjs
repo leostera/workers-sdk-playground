@@ -1,14 +1,13 @@
 import assert from "node:assert/strict";
-import { execFile, spawn } from "node:child_process";
+import { execFile } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 
 const exec = promisify(execFile);
+const baseUrl = process.env.PLAYGROUND_URL ?? "http://127.0.0.1:8787";
 
 async function git(cwd, args, token) {
   const env = {
@@ -29,64 +28,26 @@ async function git(cwd, args, token) {
   await exec("git", args, { cwd, env });
 }
 
-async function freePort() {
-  const server = createServer();
-  await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", resolve);
-  });
-  const { port } = server.address();
-  await new Promise((resolve) => server.close(resolve));
-  return port;
-}
-
-async function startDevServer(port) {
-  const child = spawn(process.execPath, ["node_modules/cf/bin/cf", "dev", "--port", String(port)], {
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let output = "";
-  for (const stream of [child.stdout, child.stderr]) {
-    stream.on("data", (chunk) => {
-      output = (output + chunk.toString()).slice(-16_000);
-    });
-  }
-
-  const baseUrl = `http://127.0.0.1:${port}`;
-  const deadline = Date.now() + 45_000;
-  while (Date.now() < deadline) {
-    if (child.exitCode !== null) break;
-    try {
-      const response = await fetch(`${baseUrl}/health`);
-      if (response.ok && (await response.text()) === "artifacts-playground-ready") {
-        return { child, baseUrl };
-      }
-    } catch {
-      // The dev server has not opened its port yet.
-    }
-    await delay(250);
-  }
-  child.kill("SIGTERM");
-  throw new Error(`cf dev did not become ready:\n${output}`);
-}
-
-async function stopDevServer(child) {
-  if (child.exitCode !== null) return;
-  child.kill("SIGTERM");
-  await Promise.race([
-    new Promise((resolve) => child.once("exit", resolve)),
-    delay(5_000),
-  ]);
-  if (child.exitCode === null) child.kill("SIGKILL");
-}
-
 test("cf dev serves a local Artifacts binding and accepts Git pushes", async (t) => {
+  let health;
+  try {
+    health = await fetch(`${baseUrl}/health`);
+  } catch {
+    throw new Error("Start `bun run cf dev` in another terminal before running `bun test`");
+  }
+  if (!health.ok || (await health.text()) !== "artifacts-playground-ready") {
+    throw new Error(`The playground is not running at ${baseUrl}. Check the URL printed by cf dev.`);
+  }
+
   const directory = await mkdtemp(path.join(tmpdir(), "artifacts-playground-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
 
-  const { child, baseUrl } = await startDevServer(await freePort());
-  t.after(() => stopDevServer(child));
-
-  const response = await fetch(`${baseUrl}/create`, { method: "POST" });
+  const name = `demo-${crypto.randomUUID().slice(0, 8)}`;
+  const response = await fetch(`${baseUrl}/create`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
   assert.equal(response.status, 200, "Repository creation failed");
   const { remote, token } = await response.json();
   assert.equal(new URL(remote).hostname, "127.0.0.1");
@@ -97,7 +58,7 @@ test("cf dev serves a local Artifacts binding and accepts Git pushes", async (t)
   await git(directory, ["commit", "-m", "add example file"]);
   await git(directory, ["push", remote, "main"], token);
 
-  const file = await fetch(`${baseUrl}/read`);
+  const file = await fetch(`${baseUrl}/read?name=${name}`);
   assert.equal(file.status, 200);
   assert.equal(await file.text(), "Hello from local Artifacts!\n");
 });
